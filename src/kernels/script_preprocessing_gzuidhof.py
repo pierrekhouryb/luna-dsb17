@@ -10,7 +10,9 @@ import matplotlib.pyplot as plt
 from skimage import measure, morphology
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
-INPUT_FOLDER = '/media/pkb/pkb-store/dsb2017/sample_images/'
+# INPUT_FOLDER = '/media/pkb/pkb-store/dsb2017/sample_images/'
+
+INPUT_FOLDER = 'Y:\\dsb2017\\sample_images\\'
 patients = os.listdir(INPUT_FOLDER)
 patients.sort()
 
@@ -163,7 +165,7 @@ segmented_lungs = segment_lung_mask(pix_resampled, False)
 segmented_lungs_fill = segment_lung_mask(pix_resampled, True)
 
 # plot_3d(segmented_lungs, 0)
-plot_3d(segmented_lungs_fill, 0)
+# plot_3d(segmented_lungs_fill, 0)
 # plot_3d(segmented_lungs_fill - segmented_lungs, 0)
 
 MIN_BOUND = -1000.0

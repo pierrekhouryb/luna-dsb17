@@ -131,11 +131,7 @@ def preprocess_scan(image, scan, do_resample=True, do_normalize=True, do_zerocen
     return preprocessed
 
 # Extract lungs from 3d scan data based on method.
-def extract_lungs_in_scan(in_image, return_mask=False, method='zuidhof'):
-    # make sure trheshold is based on same range
-    # add switch for method
-    # add switch for binary mask/real data
-
+def extract_lungs_in_scan(in_image, return_mask=False, method='arnavjain'):
     def extract_lungs_in_scan_arnavjain(in_image):
         threshold = (-400 - MIN_BOUND) / (MAX_BOUND - MIN_BOUND) - PIXEL_MEAN
         def segment_slice(im):

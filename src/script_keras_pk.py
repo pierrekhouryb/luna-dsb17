@@ -10,7 +10,7 @@ ROOT_FOLDER = 'Y:\\dsb2017\\'
 
 conf = dict()
 # Change this variable to 0 in case you want to use full dataset
-conf['use_sample_only'] = 1
+conf['use_sample_only'] = 0
 # Save weights
 conf['save_weights'] = 1
 # How many patients will be in train and validation set during training. Range: (0; 1)
@@ -48,13 +48,60 @@ from keras.layers.core import Dense, Dropout, Flatten
 from keras.layers.convolutional import Convolution2D, MaxPooling2D, ZeroPadding2D
 from keras.optimizers import SGD
 from keras.callbacks import EarlyStopping, ModelCheckpoint
+import scipy.ndimage
+from skimage import data, filters, measure, morphology, feature, segmentation
 import time
 import json
 np.random.seed(2016)
 random.seed(2016)
 
-
 def load_and_normalize_dicom(path, x, y):
+    MIN_BOUND = -1000.0
+    MAX_BOUND = 400.0
+    PIXEL_MEAN = 0.25
+    threshold = (-400 - MIN_BOUND) / (MAX_BOUND - MIN_BOUND) - PIXEL_MEAN
+    def segment_slice(im):
+        binary = im < threshold
+        cleared = segmentation.clear_border(binary)
+        label_image = measure.label(cleared)
+
+        areas = [r.area for r in measure.regionprops(label_image)]
+        areas.sort()
+        if len(areas) > 2:
+            for region in measure.regionprops(label_image):
+                if region.area < areas[-2]:
+                    for coordinates in region.coords:
+                           label_image[coordinates[0], coordinates[1]] = 0
+        binary = label_image > 0
+        selem = morphology.disk(2)
+        binary =  morphology.binary_erosion(binary, selem)
+        selem =  morphology.disk(10)
+        binary =  morphology.binary_closing(binary, selem)
+        edges = filters.roberts(binary)
+        binary = scipy.ndimage.binary_fill_holes(edges)
+
+        return im * binary
+    def normalize(im):
+        im = (im - MIN_BOUND) / (MAX_BOUND - MIN_BOUND)
+        im[im>1] = 1.
+        im[im<0] = 0.
+        return im
+    def zerocenter(im):
+        im = im - PIXEL_MEAN
+        return im
+
+    dicom1 = dicom.read_file(path)
+    dicom_img = dicom1.pixel_array.astype(np.float64)
+
+    dicom_img = normalize(dicom_img)
+    dicom_img = zerocenter(dicom_img)
+    dicom_img = segment_slice(dicom_img)
+
+    if dicom_img.shape != (x, y):
+        dicom_img = cv2.resize(dicom_img, (x, y), interpolation=cv2.INTER_CUBIC)
+    return dicom_img
+
+def old_load_and_normalize_dicom(path, x, y):
     dicom1 = dicom.read_file(path)
     dicom_img = dicom1.pixel_array.astype(np.float64)
     mn = dicom_img.min()
@@ -63,11 +110,11 @@ def load_and_normalize_dicom(path, x, y):
         dicom_img = (dicom_img - mn)/(mx - mn)
     else:
         dicom_img[:, :] = 0
+
     if dicom_img.shape != (x, y):
         dicom_img = cv2.resize(dicom_img, (x, y), interpolation=cv2.INTER_CUBIC)
-    dicom_img
-    return dicom_img
 
+    return dicom_img
 
 def batch_generator_train(files, train_csv_table, batch_size):
     number_of_batches = np.ceil(len(files)/batch_size)
@@ -100,7 +147,6 @@ def batch_generator_train(files, train_csv_table, batch_size):
             random.shuffle(files)
             counter = 0
 
-
 def get_custom_CNN():
     model = Sequential()
     model.add(ZeroPadding2D((1, 1), input_shape=(1, conf['image_shape'][0], conf['image_shape'][1]), dim_ordering='th'))
@@ -128,7 +174,6 @@ def get_custom_CNN():
 
     return model
 
-
 def get_train_single_fold(train_data, fraction):
     ids = train_data['id'].values
     random.shuffle(ids)
@@ -136,7 +181,6 @@ def get_train_single_fold(train_data, fraction):
     train_list = ids[:split_point]
     valid_list = ids[split_point:]
     return train_list, valid_list
-
 
 def create_single_model():
 
@@ -178,8 +222,7 @@ def create_single_model():
 
     return model
 
-
-def create_submission(model):
+def create_submission(model, name='subm'):
     sample_subm = pd.read_csv(ROOT_FOLDER + "stage1_sample_submission.csv")
     ids = sample_subm['id'].values
     for id in ids:
@@ -196,16 +239,20 @@ def create_submission(model):
         predictions = model.predict(image_list, verbose=1, batch_size=batch_size)
         pred_value = predictions[:, 1].mean()
         sample_subm.loc[sample_subm['id'] == id, 'cancer'] = pred_value
-    sample_subm.to_csv("subm.csv", index=False)
+    sample_subm.to_csv(name + ".csv", index=False)
 
 
 if __name__ == '__main__':
+    submlabel = '170301_0852_subm_stage1'
     start = time.time()
     model = create_single_model()
-    if conf['save_weights'] == 1:
-        model.save_weights('mdl.h5')
-        with open('conf.json', 'w') as fp:
-            json.dump(conf, fp)
-    create_submission(model)
     end = time.time()
-    print("Execution time:" + str(end - start))
+    print("Model creation took:" + str(end - start))
+    if conf['save_weights'] == 1:
+        model.save_weights(submlabel+'_mdl.h5')
+        with open(submlabel+'_conf.json', 'w') as fp:
+            json.dump(conf, fp)
+    start = time.time()
+    create_submission(model, submlabel)
+    end = time.time()
+    print("Submission creation took:" + str(end - start))

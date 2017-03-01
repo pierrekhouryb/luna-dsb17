@@ -6,7 +6,7 @@ import imageprocessing
 def savefig(fig, filename, savedir="../fig/"):
     if not os.path.exists(savedir):
         os.makedirs(savedir)
-    fig.savefig(savedir+filename,bbox_inches='tight')
+    fig.savefig(savedir+filename+'.png',bbox_inches='tight',format='png')
 
 def check_image(image, title='', save=False):
     fig = plt.figure(num=None, figsize=(16,12.8), dpi=80, facecolor='w', edgecolor='k')
@@ -15,21 +15,22 @@ def check_image(image, title='', save=False):
     # plt.xlim((-1000, 2500))
     plt.ticklabel_format(style='sci',scilimits=(0,1),axis='y')
     if save:
-        savefig(fig, title)
+        savefig(fig, title, savedir=OUTPUT_FOLDER)
 
 def disp_image(image, sliceindex, title='', save=False):
     fig = plt.figure(num=None, figsize=(16,12.8), dpi=80, facecolor='w', edgecolor='k')
     plt.imshow(image[sliceindex,:,:], cmap=plt.cm.bone)
     plt.colorbar()
     if save:
-        savefig(fig, title)
+        savefig(fig, title, savedir=OUTPUT_FOLDER)
 
 do_save = True
 
 #Locate data
 INPUT_FOLDER = 'Y:\\dsb2017\\stage1\\' #<--change this to your data folder
+OUTPUT_FOLDER = '../fig/'+'170227/'
 #Select a subset of patient
-list_patients = imageprocessing.select_patients(15, INPUT_FOLDER, 'first')
+list_patients = imageprocessing.select_patients(1, INPUT_FOLDER, 'first')
 for i, p in enumerate(list_patients):
     #Load a patient
     image, scan = imageprocessing.load_scan(INPUT_FOLDER+p)

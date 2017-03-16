@@ -1,10 +1,19 @@
+#!/usr/bin/env python
+
+""" Comments about the file
+"""
+
+import logging
 import numpy as np
 import pandas as pd
 import dicom
 import os
 import scipy.ndimage
 import matplotlib.pyplot as plt
+import random
 from skimage import data, filters, measure, morphology, feature, segmentation
+
+logger = logging.getLogger(__name__)
 
 # LUNA 16 constants
 MIN_BOUND = -1000.0
@@ -17,16 +26,19 @@ PIXEL_MEAN = 0.25
 
 def select_patients(n, folder, method='first'):
     patients = sorted(os.listdir(folder))
+    # patients = [os.path.join(folder, p) for p in patients]
 
     if not patients:
-        print('No patients found.')
+        logger.warning('No patients found.')
         return
 
     if len(patients) < n:
-        print('Not enough patient s in this folder. Found {} but need {}.'.format(len(patients), n))
+        logger.warning(
+            'Not enough patient s in this folder. Found {} but need {}.'.format(
+                len(patients), n))
         return
 
-    if n == -1:
+    if (n == -1) or (n > len(patients)):
         return patients
 
     if method == 'first':
@@ -35,8 +47,14 @@ def select_patients(n, folder, method='first'):
     if method == 'last':
         return patients[-n:]
 
-    if method == 'random':  # to implement
-        return 0
+    if method == 'random':
+        out_l = []
+        while n > 0:
+            idx = random.randrange(0, len(patients))
+            out_l.append(patients[idx])
+            patients.remove(patients[idx])
+            n -= 1
+        return out_l
 
 # Select patients from folder based on their index.
 # Folder must be containing patients folders only.
@@ -50,7 +68,10 @@ def select_patients_by_index(indices, folder):
         return
 
     if len(patients) < max(indices):
-        print('Not enough patients in this folder. Found {} but need {}.'.format(len(patients), max(indices)))
+        logger.warning(
+            'Not enough patients in this folder. Found {} but need {}.'.format(
+                len(patients),
+                max(indices)))
         return
 
     return [patients[i] for i in indices]
@@ -59,8 +80,9 @@ def select_patients_by_index(indices, folder):
 
 
 def load_scan(patient_folder):
-    slices = [dicom.read_file(patient_folder + '/' + s)
-              for s in os.listdir(patient_folder)]
+    slices = [dicom.read_file(
+        os.path.abspath(os.path.join(patient_folder, s))
+    ) for s in os.listdir(patient_folder)]
     slices.sort(key=lambda x: int(x.ImagePositionPatient[2]))
     try:
         slice_thickness = np.abs(
@@ -104,8 +126,9 @@ def load_scan(patient_folder):
 # Preprocess single patient.
 
 
-def preprocess_scan(image, scan,
-        do_resample=True, do_normalize=True, do_zerocenter=True):
+def preprocess_scan(image, scan, do_resample=True, do_normalize=True,
+        do_zerocenter=True):
+    logger.info(' - Preprocess the scan')
     if not (do_resample or do_normalize or do_zerocenter):
         return image
 
@@ -151,6 +174,8 @@ def preprocess_scan(image, scan,
 
 
 def extract_lungs_in_scan(in_image, return_mask=False, method='arnavjain'):
+    logger.info(' - extract lungs in scan ({})'.format(method))
+
     def extract_lungs_in_scan_arnavjain(in_image):
         threshold = (-400 - MIN_BOUND) / (MAX_BOUND - MIN_BOUND) - PIXEL_MEAN
 

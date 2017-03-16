@@ -124,8 +124,10 @@ def preprocess_scan(image, scan, do_resample=True, do_normalize=True, do_zerocen
     if do_resample:
         preprocessed = resample(image, scan)
     if do_normalize:
+        preprocessed = image if not do_resample else preprocessed
         preprocessed = normalize(preprocessed)
     if do_zerocenter:
+        preprocessed = image if (not do_resample and not do_normalize) else preprocessed
         preprocessed = zerocenter(preprocessed)
 
     return preprocessed
@@ -176,7 +178,7 @@ def extract_lungs_in_scan(in_image, return_mask=False, method='arnavjain'):
                 return None
         # not actually binary, but 1 and 2.
         # 0 is treated as background, which we do not want
-        threshold = (-320 - MIN_BOUND) / (MAX_BOUND - MIN_BOUND) - PIXEL_MEAN
+        threshold = (-400 - MIN_BOUND) / (MAX_BOUND - MIN_BOUND) - PIXEL_MEAN
         binary_image = np.array(in_image > threshold, dtype=np.int8)+1
         labels = measure.label(binary_image)
 

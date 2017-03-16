@@ -13,9 +13,10 @@ PIXEL_MEAN = 0.25
 
 # Select n patients from folder, based on method.
 # Folder must be containing patients folders only.
+
+
 def select_patients(n, folder, method='first'):
-    patients = os.listdir(folder)
-    patients.sort()
+    patients = sorted(os.listdir(folder))
 
     if not patients:
         print('No patients found.')
@@ -25,23 +26,24 @@ def select_patients(n, folder, method='first'):
         print('Not enough patient s in this folder. Found {} but need {}.'.format(len(patients), n))
         return
 
-    if n==-1:
+    if n == -1:
         return patients
 
-    if method=='first':
+    if method == 'first':
         return patients[:n]
 
-    if method=='last':
+    if method == 'last':
         return patients[-n:]
 
-    if method=='random': # to implement
+    if method == 'random':  # to implement
         return 0
 
 # Select patients from folder based on their index.
 # Folder must be containing patients folders only.
+
+
 def select_patients_by_index(indices, folder):
-    patients = os.listdir(folder)
-    patients.sort()
+    patients = sorted(os.listdir(folder))
 
     if not patients:
         print('No patients found.')
@@ -54,13 +56,20 @@ def select_patients_by_index(indices, folder):
     return [patients[i] for i in indices]
 
 # Load single patient.
+
+
 def load_scan(patient_folder):
-    slices = [dicom.read_file(patient_folder + '/' + s) for s in os.listdir(patient_folder)]
-    slices.sort(key = lambda x: int(x.ImagePositionPatient[2]))
+    slices = [dicom.read_file(patient_folder + '/' + s)
+              for s in os.listdir(patient_folder)]
+    slices.sort(key=lambda x: int(x.ImagePositionPatient[2]))
     try:
-        slice_thickness = np.abs(slices[0].ImagePositionPatient[2] - slices[1].ImagePositionPatient[2])
+        slice_thickness = np.abs(
+            slices[0].ImagePositionPatient[2] -
+            slices[1].ImagePositionPatient[2])
     except:
-        slice_thickness = np.abs(slices[0].SliceLocation - slices[1].SliceLocation)
+        slice_thickness = np.abs(
+            slices[0].SliceLocation -
+            slices[1].SliceLocation)
 
     for s in slices:
         s.SliceThickness = slice_thickness
@@ -82,7 +91,8 @@ def load_scan(patient_folder):
             slope = slices[slice_number].RescaleSlope
 
             if slope != 1:
-                image[slice_number] = slope * image[slice_number].astype(np.float64)
+                image[slice_number] = slope * \
+                    image[slice_number].astype(np.float64)
                 image[slice_number] = image[slice_number].astype(np.int16)
 
             image[slice_number] += np.int16(intercept)
@@ -92,11 +102,14 @@ def load_scan(patient_folder):
     return (get_pixels_hu(slices), slices)
 
 # Preprocess single patient.
-def preprocess_scan(image, scan, do_resample=True, do_normalize=True, do_zerocenter=True):
+
+
+def preprocess_scan(image, scan,
+        do_resample=True, do_normalize=True, do_zerocenter=True):
     if not (do_resample or do_normalize or do_zerocenter):
         return image
 
-    def resample(image, scan, new_spacing=[1,1,1]):
+    def resample(image, scan, new_spacing=[1, 1, 1]):
         # Determine current pixel spacing
         spacing = map(float, ([scan[0].SliceThickness] + scan[0].PixelSpacing))
         spacing = np.array(list(spacing))
@@ -107,14 +120,15 @@ def preprocess_scan(image, scan, do_resample=True, do_normalize=True, do_zerocen
         real_resize_factor = new_shape / image.shape
         new_spacing = spacing / real_resize_factor
 
-        image = scipy.ndimage.interpolation.zoom(image, real_resize_factor, mode='nearest')
+        image = scipy.ndimage.interpolation.zoom(
+            image, real_resize_factor, mode='nearest')
 
-        return image #, new_spacing
+        return image  # , new_spacing
 
     def normalize(image):
         image = (image - MIN_BOUND) / (MAX_BOUND - MIN_BOUND)
-        image[image>1] = 1.
-        image[image<0] = 0.
+        image[image > 1] = 1.
+        image[image < 0] = 0.
         return image
 
     def zerocenter(image):
@@ -127,32 +141,35 @@ def preprocess_scan(image, scan, do_resample=True, do_normalize=True, do_zerocen
         preprocessed = image if not do_resample else preprocessed
         preprocessed = normalize(preprocessed)
     if do_zerocenter:
-        preprocessed = image if (not do_resample and not do_normalize) else preprocessed
+        preprocessed = image if (
+            not do_resample and not do_normalize) else preprocessed
         preprocessed = zerocenter(preprocessed)
 
     return preprocessed
 
 # Extract lungs from 3d scan data based on method.
+
+
 def extract_lungs_in_scan(in_image, return_mask=False, method='arnavjain'):
     def extract_lungs_in_scan_arnavjain(in_image):
         threshold = (-400 - MIN_BOUND) / (MAX_BOUND - MIN_BOUND) - PIXEL_MEAN
+
         def segment_slice(im):
             binary = im < threshold
             cleared = segmentation.clear_border(binary)
             label_image = measure.label(cleared)
 
-            areas = [r.area for r in measure.regionprops(label_image)]
-            areas.sort()
+            areas = sorted([r.area for r in measure.regionprops(label_image)])
             if len(areas) > 2:
                 for region in measure.regionprops(label_image):
                     if region.area < areas[-2]:
                         for coordinates in region.coords:
-                               label_image[coordinates[0], coordinates[1]] = 0
+                            label_image[coordinates[0], coordinates[1]] = 0
             binary = label_image > 0
             selem = morphology.disk(2)
-            binary =  morphology.binary_erosion(binary, selem)
-            selem =  morphology.disk(10)
-            binary =  morphology.binary_closing(binary, selem)
+            binary = morphology.binary_erosion(binary, selem)
+            selem = morphology.disk(10)
+            binary = morphology.binary_closing(binary, selem)
 
             edges = filters.roberts(binary)
             binary = scipy.ndimage.binary_fill_holes(edges)
@@ -161,7 +178,7 @@ def extract_lungs_in_scan(in_image, return_mask=False, method='arnavjain'):
 
         out_mask = np.zeros(in_image.shape)
         for i in range(in_image.shape[0]):
-            out_mask[i,...] = segment_slice(in_image[i,...])
+            out_mask[i, ...] = segment_slice(in_image[i, ...])
 
         return out_mask
 
@@ -179,18 +196,17 @@ def extract_lungs_in_scan(in_image, return_mask=False, method='arnavjain'):
         # not actually binary, but 1 and 2.
         # 0 is treated as background, which we do not want
         threshold = (-400 - MIN_BOUND) / (MAX_BOUND - MIN_BOUND) - PIXEL_MEAN
-        binary_image = np.array(in_image > threshold, dtype=np.int8)+1
+        binary_image = np.array(in_image > threshold, dtype=np.int8) + 1
         labels = measure.label(binary_image)
 
         # Pick the pixel in the very corner to determine which label is air.
         #   Improvement: Pick multiple background labels from around the patient
         #   More resistant to "trays" on which the patient lays cutting the air
         #   around the person in half
-        background_label = labels[0,0,0]
+        background_label = labels[0, 0, 0]
 
-        #Fill the air around the person
+        # Fill the air around the person
         binary_image[background_label == labels] = 2
-
 
         # Method of filling the lung structures (that is superior to something like
         # morphological closing)
@@ -201,24 +217,23 @@ def extract_lungs_in_scan(in_image, return_mask=False, method='arnavjain'):
                 labeling = measure.label(axial_slice)
                 l_max = largest_label_volume(labeling, bg=0)
 
-                if l_max is not None: #This slice contains some lung
+                if l_max is not None:  # This slice contains some lung
                     binary_image[i][labeling != l_max] = 1
 
-
-        binary_image -= 1 #Make the image actual binary
-        binary_image = 1-binary_image # Invert it, lungs are now 1
+        binary_image -= 1  # Make the image actual binary
+        binary_image = 1 - binary_image  # Invert it, lungs are now 1
 
         # Remove other air pockets insided body
         labels = measure.label(binary_image, background=0)
         l_max = largest_label_volume(labels, bg=0)
-        if l_max is not None: # There are air pockets
+        if l_max is not None:  # There are air pockets
             binary_image[labels != l_max] = 0
 
         return binary_image
 
-    if method=='arnavjain':
+    if method == 'arnavjain':
         seg_method = extract_lungs_in_scan_arnavjain
-    elif method=='zuidhof':
+    elif method == 'zuidhof':
         seg_method = extract_lungs_in_scan_zuidhof
 
     mask = seg_method(in_image)
@@ -226,4 +241,4 @@ def extract_lungs_in_scan(in_image, return_mask=False, method='arnavjain'):
     if return_mask:
         return mask
     else:
-        return in_image*mask
+        return in_image * mask
